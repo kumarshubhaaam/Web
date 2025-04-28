@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Stream Access Verification</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(to right, #4facfe, #00f2fe);
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+    }
+    h1 {
+      margin-bottom: 20px;
+    }
+    .btn {
+      background: #ffffff;
+      color: #4facfe;
+      border: none;
+      padding: 15px 25px;
+      margin: 10px;
+      border-radius: 50px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .btn:hover {
+      background: #e0e0e0;
+    }
+    input {
+      padding: 12px;
+      border-radius: 10px;
+      border: none;
+      margin: 10px;
+      font-size: 16px;
+      width: 200px;
+    }
+    iframe {
+      width: 100%;
+      height: 500px;
+      border: none;
+      border-radius: 20px;
+      margin-top: 20px;
+    }
+    #timer {
+      margin-top: 10px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Verify to Access the Video</h1>
+
+  <div id="step1">
+    <button class="btn" onclick="startVerification()">Start Verification</button>
+  </div>
+
+  <div id="step2" style="display: none;">
+    <input type="text" id="verificationCode" placeholder="Enter your Code">
+    <button class="btn" onclick="verifyToken()">Verify Code</button>
+  </div>
+
+  <div id="videoContainer" style="display: none;">
+    <iframe id="videoIframe" allowfullscreen></iframe>
+    <div id="timer"></div>
+  </div>
+
+<script>
+async function startVerification() {
+  Swal.fire({
+    title: 'Please wait...',
+    text: 'Generating secure link...',
+    allowOutsideClick: false,
+    didOpen: () => {
+      Swal.showLoading();
+    }
+  });
+
+  try {
+    const res = await fetch('/generate-link', { method: 'POST' });
+    const data = await res.json();
+    Swal.close();
+
+    if (data.success) {
+      Swal.fire({
+        title: 'Link Ready!',
+        text: 'Complete the ad and come back to enter your code.',
+        icon: 'success',
+        confirmButtonText: 'Go to Ad'
+      }).then(() => {
+        window.open(data.link, '_blank');
+        document.getElementById('step2').style.display = 'block';
+      });
+    } else {
+      Swal.fire('Error', 'Failed to generate verification link.', 'error');
+    }
+  } catch (error) {
+    console.error(error);
+    Swal.close();
+    Swal.fire('Error', 'Something went wrong.', 'error');
+  }
+}
+
+async function verifyToken() {
+  const code = document.getElementById('verificationCode').value.trim();
+  if (!code) {
+    Swal.fire('Oops!', 'Please enter a code!', 'warning');
+    return;
+  }
+
+  Swal.fire({
+    title: 'Verifying Code...',
+    allowOutsideClick: false,
+    didOpen: () => {
+      Swal.showLoading();
+    }
+  });
+
+  try {
+    const response = await fetch('/verify-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: code })
+    });
+
+    const result = await response.json();
+    Swal.close();
+
+    if (result.success) {
+      Swal.fire('Success!', 'Access granted for 24 hours.', 'success');
+      document.getElementById('videoContainer').style.display = 'block';
+      document.getElementById('videoIframe').src = result.videoLink;
+      startCountdown(result.expirationTime);
+      document.getElementById('step1').style.display = 'none';
+      document.getElementById('step2').style.display = 'none';
+    } else {
+      Swal.fire('Error', result.message || 'Verification failed.', 'error');
+    }
+  } catch (error) {
+    console.error(error);
+    Swal.close();
+    Swal.fire('Error', 'Something went wrong.', 'error');
+  }
+}
+
+function startCountdown(expirationTime) {
+  function updateTimer() {
+    const now = Date.now();
+    const distance = expirationTime - now;
+
+    if (distance <= 0) {
+      document.getElementById('timer').innerText = "Session expired. Please verify again.";
+      document.getElementById('videoContainer').style.display = 'none';
+      document.getElementById('step1').style.display = 'block';
+      return;
+    }
+
+    const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+    document.getElementById('timer').innerText = `Time Left: ${hours}h ${minutes}m ${seconds}s`;
+  }
+
+  setInterval(updateTimer, 1000);
+}
+</script>
+
+</body>
+</html>
